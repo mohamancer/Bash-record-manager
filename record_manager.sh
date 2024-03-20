@@ -231,9 +231,9 @@ main_menu() {
 # Set record and log file names
 record_file=$1
 log_file="${record_file%.*}_log.txt"
-set -x
+
 # Main loop
 while true; do
     main_menu
 done
-set +x
+
