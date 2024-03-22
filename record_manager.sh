@@ -245,10 +245,26 @@ main_menu() {
     esac
 }
 
+
+if [ $# -ne 1 ]; then
+	echo "Usage: $0 <record_file_name>"
+fi	
+
 # Set record and log file names
 record_file=$1
 log_file="${record_file%.*}_log.txt"
 
+if ! [ -e "$record_file" ]; then
+	read -p "error: $record_file does not exist, do you want to create it? (y/N)" op
+	if [[ $op == "y" ]]; then
+		touch "$record_file"
+	elif [[ $op == "N"]];then
+		exit 1
+	else
+		echo "option invalid, quitting program"
+		exit 1
+	fi
+fi
 # Main loop
 while true; do
     main_menu
