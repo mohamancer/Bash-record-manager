@@ -248,7 +248,9 @@ main_menu() {
 # Set record and log file names
 record_file=$1
 log_file="${record_file%.*}_log.txt"
+
 # Main loop
 while true; do
     main_menu
 done
+
