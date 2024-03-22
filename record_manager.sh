@@ -6,37 +6,45 @@ found_records_menu(){
 	while true; do
         	echo "Multiple records found. Please choose one to update:"
                 grep "$record_name" "$record_file" | cat -n
-                read -p "Enter the number of the record to update: " choice
-                if [[ $choice =~ ^[0-9]+$ ]] && [[ $choice -le $(echo "$options" | wc -l) ]]; then
+                read -p "Enter the number of the record to update, or press enter for your initial prompt: " choice
+		if [ -z "$choice" ] && ! [[ $mode == "insert" ]]; then
+			echo "default can only be used on insert"
+		elif [ -z "$choice" ]; then
+			echo "$record_name,$amount" >> "$record_file"
+			return 0
+		elif [[ "$choice" =~ ^[1-9]+$ ]] && [[ $choice -le $(echo "$options" | wc -l) ]]; then
                 	selected_record=$(echo "$options" | sed -n "${choice}p" | cut -d, -f1)
 			selected_amount=$(echo "$options" | sed -n "${choice}p" | cut -d, -f2)
 			if [[ $mode == "insert" ]]; then
-				update_record_amount "$selected_record" "$(( selected_amount + amount ))"
+				update_record "$selected_record" "$(( selected_amount + amount ))"
+				return 0
 			elif [[ $mode == "delete" ]]; then
 				if [[ $selected_amount -lt $amount ]]; then
-					echo "Number of records less than required for delete"
-					return 1
+					echo "Number of records to delete more than that in stock"
 				elif [[ $selected_amount -eq $amount ]]; then
-					sed -i "/^$selected_records,/d" $record_file
+					sed -i "/^$selected_record,/d" $record_file
+					return 0
 				else
-					update_record_amount "$selected_record" "$(( selected_amount - amount ))"
+					update_record "$selected_record" "$(( selected_amount - amount ))"
+					return 0
 				fi
-			else #update name
+			elif [[ $mode == "name" ]]; then #update name
 				local old_name="$1"
 				local new_name="$2"
-				sed -i "s/${old_name},.*/${new_name},${selected_amount}/" "$record_file"
+				sed -i "s/${selected_record},.*/${new_name},${selected_amount}/" "$record_file"
 				return 0
-			fi	
-			sed -i '$ d' "$log_file"
-			return 0			
+			else
+				update_record "$selected_record" "$amount"
+				return 0
+			fi				
 		else
-			echo "Invalid choice. Please choose a number from the list"
+			echo "Invalid choice. Please choose a number from the list or press enter"
 		fi
 	done
 
 }
 
-# Extracts and validates both arguments
+# validates both arguments
 valid_arguments(){	
         validate_record_name "$record_name" || return 1
         validate_amount "$amount" || return 1
@@ -83,11 +91,14 @@ handle() {
         fi
 
 }
+# Extract arguments
+extract(){
+	record_name=$(echo "$@" | sed 's/ [^ ]*$//')
+        amount=$(echo "$@" | sed 's/.* //')
+}
 # Function to insert a record
 insert_record() {
-        record_name=$(echo "$@" | sed 's/ [^ ]*$//')
-        amount=$(echo "$@" | sed 's/.* //')
-
+	extract $@
 	if handle "insert"; then
 		echo "Successfully inserted records"
 	        log_event "Insert Success"
@@ -100,9 +111,7 @@ insert_record() {
 
 # Function to delete a record
 delete_record() {
-	record_name=$(echo "$@" | sed 's/ [^ ]*$//')
-        amount=$(echo "$@" | sed 's/.* //')
-
+	extract $@
 	if handle "delete"; then
                 echo "Successfully deleted records"
                 log_event "Delete Success"
@@ -115,7 +124,8 @@ delete_record() {
 
 # Function to show the searched records
 search_record() {
-	validate_record_name $1 || return 1
+	record_name=$1
+	validate_record_name $record_name || return 1
 	if search; then
 		grep "$record_name" "$record_file" | sort
 		log_event "Search Success"
@@ -136,10 +146,11 @@ search() {
 update_record_name() {
     local old_name=$1
     local new_name=$2
+    record_name=$old_name
     validate_record_name "$old_name" || return 1
     validate_record_name "$new_name" || return 1
-    mode="update"
-    if grep -q "$old_name" "$record_file"; then
+    mode="name"
+    if search; then
 	options=$(grep "$old_name" "$record_file")
         found_records_menu "$old_name" "$new_name"
 	log_event "UpdateName Success"
@@ -148,19 +159,25 @@ update_record_name() {
         log_event "UpdateName Failure"
     fi
 }
+# Update Record function
 
-# Function to update record amount
 update_record_amount() {
-    record_name=$(echo "$@" | sed 's/ [^ ]*$//')
-    amount=$(echo "$@" | sed 's/.* //')
-
-    if grep -q "^$record_name" "$record_file"; then
-        sed -i "s/${record_name},.*/${record_name},${amount}/" "$record_file"
-	log_event "UpdateAmount $amount"
-    else
-        echo "Error: Record not found"
-        log_event "UpdateAmount Failure"
-    fi
+	
+	extract $@
+	if handle "amount"; then
+		echo "Successfully updated amount"
+	        log_event "UpdateAmount Success $amount"
+	else
+		echo "Error: record not found"
+		log_event "UpdateAmount Failure"
+	fi
+}
+# Function to update record amount
+update_record() {
+    record_name=$1
+    amount=$2 
+    sed -i "s/${record_name},.*/${record_name},${amount}/" "$record_file"
+   
 }
 
 # Function to print total amount of records
@@ -231,9 +248,7 @@ main_menu() {
 # Set record and log file names
 record_file=$1
 log_file="${record_file%.*}_log.txt"
-set -x
 # Main loop
 while true; do
     main_menu
 done
-set +x
