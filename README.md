@@ -15,4 +15,4 @@ This Bash script serves as a Record Collection Management System, allowing users
 ### Usage:
 1. Run the script by providing the record file name as an argument.
    ```bash
-   ./record_management.sh <record_file_name>
+   ./record_manager.sh <record_file_name>
